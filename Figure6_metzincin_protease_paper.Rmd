@@ -1,0 +1,313 @@
+---
+title: "Figure 6 Metzincin protease paper"
+author: "Jasmin Wächter"
+date: "2/9/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(Seurat)
+#library(SeuratWrappers)
+library(nichenetr)
+library                   (tidyverse)
+library                   (Matrix)
+library                   (dplyr)
+library                   (ggplot2)
+library                   (cowplot)
+library                   (tibble)
+library                   (readxl)
+library(EnhancedVolcano)
+```
+
+#Load trophoblast object
+```{r}
+load("/Volumes/FREECOM HDD/R_ADAM/Trophoblast.Rdata")
+```
+
+#load the differential gene expression analysis performed for figure 5 
+```{r}
+load("/Volumes/FREECOM HDD/R_ADAM/data/5_DEG/CTB_markers_all25aug21.RData")
+```
+#Figure 6A
+```{r}
+EnhancedVolcano(CTB_markers,
+                lab = CTB_markers$gene,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+               xlim = c(-6, 4),
+ ylim =c(0,320),
+ selectLab = c("FBN2"),
+               col=c("grey","grey","grey","grey"))
+```
+
+#Figure 6B
+
+```{r}
+CTB_only<- subset(Trophoblasts, idents = c("CTB 1","CTB 2","CTB 3","CTB 4"))
+```
+
+```{r}
+PrctCellExpringGene <- function(object, genes, group.by = "all"){
+    if(group.by == "all"){
+        prct = unlist(lapply(genes,calc_helper, object=object))
+        result = data.frame(Markers = genes, Cell_proportion = prct)
+        return(result)
+    }
+
+    else{        
+        list = SplitObject(object, group.by)
+        factors = names(list)
+
+        results = lapply(list, PrctCellExpringGene, genes=genes)
+        for(i in 1:length(factors)){
+        results[[i]]$Feature = factors[i]
+        }
+        combined = do.call("rbind", results)
+        return(combined)
+    }
+}
+
+calc_helper <- function(object,genes){
+    counts = object[['RNA']]@counts
+    ncells = ncol(counts)
+    if(genes %in% row.names(counts)){
+    sum(counts[genes,]>0)/ncells
+    }else{return(NA)}
+}
+
+```
+
+#How many cells express ADAMTS6, FBN2 and combined
+```{r}
+ADAMTS6_CTB <- subset (CTB_only, subset =   ADAMTS6     > 0 )
+
+ADAMTS6_CTB
+
+PrctCellExpringGene(ADAMTS6_CTB, c("ADAMTS6","FBN2"))
+
+FBN2_CTB <- subset (CTB_only, subset =   FBN2    > 0 )
+
+FBN2_CTB
+
+
+PrctCellExpringGene(FBN2_CTB, c("ADAMTS6","FBN2"))
+
+	
+```
+
+#Figure 6C
+#ADAMTS6-FBN2
+```{r}
+pdf("Violin_ADAMTS6_org.pdf",  width=6, height=5)
+VlnPlot  (object = interface.integrated, features = c("ADAMTS6"), pt.size = 0)+NoLegend()
+dev.off()
+
+pdf("Violin_ADAMTS6_org.pdf",  width=6, height=5)
+VlnPlot  (object = interface.integrated, features = c("ADAMTS6"), pt.size = 0)+NoLegend()
+dev.off()
+
+jpeg("Feature_FBN2.jpeg", units="in", width=6, height=5, res=300)
+FeaturePlot  (object = interface.integrated, features = c("FBN2"),  sort.cell = TRUE, pt.size = 1,   min.cutoff = 0, order = TRUE, cols = c("grey", "red"))+NoLegend()+ theme(axis.line = element_blank(),axis.title=element_blank(),axis.text = element_blank(),axis.ticks = element_blank())
+dev.off()
+
+jpeg("Feature_FBN2.jpeg", units="in", width=6, height=5, res=300)
+FeaturePlot  (object = interface.integrated, features = c("FBN2"),  sort.cell = TRUE, pt.size = 1,   min.cutoff = 0, order = TRUE, cols = c("grey", "red"))+NoLegend()+ theme(axis.line = element_blank(),axis.title=element_blank(),axis.text = element_blank(),axis.ticks = element_blank())
+dev.off()
+
+```
+
+
+#Figure 6D
+
+#Load previously constructed ligand target matrix and network weights
+```{r}
+load("/Volumes/FREECOM HDD/R_ADAM/data/4_ligand analysis/1_final objects/30_sept_ligand_target_matrix_full.Rdata")
+
+load("/Volumes/FREECOM HDD/R_ADAM/data/4_ligand analysis/1_final objects/30sept_weighted_networks_full.Rdata")
+```
+
+
+```{r}
+library(nichenetr)
+library(tidyverse)
+
+
+ligands_all = c("ADAMTS6") # this can be a list of multiple ligands if required
+targets_all = c("FBN2")
+
+View(ligand_tf_matrix)
+
+active_signaling_network = get_ligand_signaling_path(ligand_tf_matrix = ligand_target_matrix2, ligands_all = ligands_all, targets_all = targets_all, weighted_networks = weighted_networks)
+
+# For better visualization of edge weigths: normalize edge weights to make them comparable between signaling and gene regulatory interactions
+active_signaling_network_min_max = active_signaling_network
+active_signaling_network_min_max$sig = active_signaling_network_min_max$sig %>% mutate(weight = ((weight-min(weight))/(max(weight)-min(weight))) + 0.75)
+active_signaling_network_min_max$gr = active_signaling_network_min_max$gr %>% mutate(weight = ((weight-min(weight))/(max(weight)-min(weight))) + 0.75)
+
+
+graph_min_max = diagrammer_format_signaling_graph(signaling_graph_list = active_signaling_network_min_max, ligands_all = ligands_all, targets_all = targets_all, sig_color = "indianred", gr_color = "steelblue")
+
+# To render the graph: uncomment following line of code
+
+DiagrammeR::render_graph(graph_min_max, layout = "tree")
+
+#Figure 6B
+DiagrammeR::export_graph(graph_min_max, file_name = "ADAMTS6andFBN2connect.pdf", file_type = "pdf")
+
+
+```
+
+
+
+#Figure 6D - genes identified - what percentage in the CTB
+
+
+```{r}
+CTB_only<- subset(Trophoblasts, idents = c("CTB 1","CTB 2","CTB 3","CTB 4"))
+
+PrctCellExpringGene(CTB_only, c("ADAMTS6","FBN2","IRAK1","REST","PELI2","RNF2","STAT3","FN1","SKIL","SMAD3"))
+```
+# Result 
+```{r}
+Description:df [10 × 2]
+Markers
+<chr>
+Cell_proportion
+<dbl>
+ADAMTS6	0.4491509951			
+FBN2	0.9046923498			
+IRAK1	0.1130180756			
+REST	0.3814131824			
+PELI2	0.0009129085			
+RNF2	0.2088734709			
+STAT3	0.2882965127			
+FN1	0.2148986672			
+SKIL	0.0995070294			
+SMAD3	0.0058426146	
+```
+
+#Conversion to colour code 
+```{r}
+#RGBPercent(0%,0%,0%) -> 100%
+             
+#RGBPercent(100%,100%,100%)-> 0%
+             
+1-0.4491509951	#	ADAMTS6	
+1-0.9046923498	#FBN2		
+1-0.1130180756	#IRAK1		
+1-0.3814131824	#REST		
+1-0.0009129085	#PELI2		
+1-0.2088734709	#RNF2		
+1-0.2882965127	#STAT3		
+1-0.2148986672	#FN1		
+1-0.0995070294	#SKIL		
+1-0.0058426146	#SMAD3
+```
+```{r}
+0.550849  #	ADAMTS6	-> 55% Hex	FF8C8C
+0.09530765#FBN2		-> 10% Hex	FF1A1A
+0.8869819#IRAK1		-> 89% Hex	FFE3E3
+0.6185868#REST	->62%	Hex	FF9E9E
+0.9990871#PELI2	->100%	Hex	FFFFFF
+0.7911265#RNF2		-> 79%  Hex	FFC9C9
+0.7117035	#STAT3->	71%	Hex	FFB5B5
+0.7851013	#FN1		->79% Hex	FFC9C9
+0.900493	#SKIL		->90% Hex	FFE6E6
+0.9941574#SMAD3   ->99% Hex	FFFCFC
+
+
+```
+
+#6E
+```{r, include = FALSE}
+library(clusterProfiler)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(ReactomePA)
+require(pathview)
+```
+
+#ReactomePA - calculate %cells expressed for each gene
+```{r}
+hs <- org.Hs.eg.db
+my.symbols <- CTB_markers$gene
+CTB_names<-AnnotationDbi::select(hs, 
+       keys = my.symbols,
+       columns = c( "SYMBOL","ENTREZID"),
+       keytype = "SYMBOL")
+library(tidyverse)
+
+CTB_names<-CTB_names %>% rename(gene = SYMBOL)
+
+CTB_names_ENTREZ<-CTB_names$ENTREZID
+
+CTB_markers_del<-CTB_markers[which( CTB_markers$gene %in% CTB_names$gene),]
+
+CTB_markers_del <- merge(CTB_markers_del,CTB_names,by="gene")
+
+#--------------
+CTB_percentage<-PrctCellExpringGene(CTB_only, CTB_markers_del$gene)
+
+CTB_percentage<-CTB_percentage %>% rename(gene = Markers)
+
+CTB_markers_del <- merge(CTB_markers_del,CTB_percentage,by="gene")
+
+CTB_markers_del<-CTB_markers_del[which(CTB_markers_del$Cell_proportion!=0),]
+
+#look at percentage expression in cells 
+CTB_list_prct =CTB_markers_del[,9]
+
+names(CTB_list_prct) = CTB_markers_del$ENTREZID
+
+CTB_list_prct = sort (CTB_list_prct, decreasing = TRUE)
+CTB_list_prct<-CTB_list_prct[which(!duplicated(names(CTB_list_prct)))]
+```
+
+#investigate pathways ADAMTS6 and FBN2 are involved in
+```{r}
+my.symbols <- c("FBN2","ADAMTS6")
+help<-AnnotationDbi::select(hs, 
+       keys = my.symbols,
+       columns = c( "SYMBOL","UNIPROT","ENTREZID"),
+       keytype = "SYMBOL")
+
+
+Entrez_metzincin<-help$ENTREZID
+x <- enrichPathway(gene=Entrez_metzincin, pvalueCutoff = 0.05, readable=TRUE)
+head(x)
+```
+
+```{r}
+viewPathway("Molecules associated with elastic fibres", 
+            readable = TRUE, 
+            foldChange = CTB_list_prct)+
+        scale_color_continuous(low="grey", high="red", name = "Percentage", na.value = "#E5C494")
+
+viewPathway("Elastic fibre formation", 
+            readable = TRUE, 
+            foldChange = CTB_list_prct)+
+        scale_color_continuous(low="grey", high="red", name = "Percentage", na.value = "#E5C494")
+
+ELASTIC_fibre_PRCT_general<-viewPathway("Molecules associated with elastic fibres", 
+            readable = TRUE, 
+            foldChange = CTB_list_prct)+
+        scale_color_continuous(low="grey", high="red", name = "Percentage", na.value = "#E5C494")
+
+ELASTIC_fibre_PRCT<-viewPathway("Elastic fibre formation", 
+            readable = TRUE, 
+            foldChange = CTB_list_prct)+
+        scale_color_continuous(low="grey", high="red", name = "Percentage", na.value = "#E5C494")
+
+
+
+
+
+
+
+#Fig6E Supplemental fig 4
+ggsave("ECM_deg_PRCT_general.pdf",device = "pdf", plot= ELASTIC_fibre_PRCT_general , path = "/Users/jasmin/Desktop", width = 10, height = 5)
+
+ggsave("ELASTIC_fibre_Prct.pdf",device = "pdf", plot= ELASTIC_fibre_PRCT , path = "/Users/jasmin/Desktop", width = 10, height = 5)
+```
+
+

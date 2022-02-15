@@ -1,0 +1,386 @@
+---
+title: "Supplemental figures Metzincin protease paper"
+author: "Jasmin Wächter"
+date: "2/9/2022"
+output: html_document
+---
+
+
+```{r}
+setwd("/Volumes/FREECOM HDD/R_ADAM")
+
+
+library(ape)
+library(DoubletFinder)
+library(remotes)
+library(Matrix)
+library(fields)
+library(KernSmooth)
+library(ROCR)
+library(parallel)
+library(SingleCellExperiment)
+library(Seurat)
+library(tidyverse)
+library(Matrix)
+library(scales)
+library(cowplot)
+library(RCurl)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(fields)
+library(clustree)
+library(ggraph)
+library(plotly)
+library(MAST)
+library(multtest)
+library(metap)
+
+#library(monocle3)
+library(monocle)
+library(SeuratWrappers)
+library(SCENT)
+library(VGAM)
+library(patchwork)
+library(RColorBrewer)
+library(plotly)
+
+
+
+#From figure 1
+load("/Volumes/FREECOM HDD/R_ADAM/Trophoblast.Rdata")
+
+```
+
+#Add clustern names independently
+```{r}
+Trophoblasts@meta.data$cluster_name<- NA
+
+Trophoblasts@meta.data$cluster_name[which(stringr::str_detect(Trophoblasts@meta.data$seurat_clusters, "^0"))] <- "CTB 1"
+Trophoblasts@meta.data$cluster_name[which(stringr::str_detect(Trophoblasts@meta.data$seurat_clusters, "^1"))] <- "CTB 2"
+Trophoblasts@meta.data$cluster_name[which(stringr::str_detect(Trophoblasts@meta.data$seurat_clusters, "^2"))] <- "CTB 3"
+Trophoblasts@meta.data$cluster_name[which(stringr::str_detect(Trophoblasts@meta.data$seurat_clusters, "^3"))] <- "CTB 4"
+Trophoblasts@meta.data$cluster_name[which(stringr::str_detect(Trophoblasts@meta.data$CellType, "^4"))] <- "cCTB 1"
+Trophoblasts@meta.data$cluster_name[which(stringr::str_detect(Trophoblasts@meta.data$seurat_clusters, "^7"))] <- "cCTB 2"
+Trophoblasts@meta.data$cluster_name[which(stringr::str_detect(Trophoblasts@meta.data$seurat_clusters, "^5"))] <- "EVT"
+Trophoblasts@meta.data$cluster_name[which(stringr::str_detect(Trophoblasts@meta.data$seurat_clusters, "^6"))] <- "SCTp"
+
+```
+
+#reassign cluster levels- cluster order 
+```{r}
+#this is to have the clusters appear in the order that you desire
+
+# cluster re-assignment occurs, which re-assigns clustering in my_levels (assuming you have 12 clusters in total)
+my_levels <- c("SCTp", "CTB 1","CTB 2", "CTB 3", "CTB 4", "cCTB 1","cCTB 2", "EVT")
+
+# Re-level object@ident
+Trophoblasts@active.ident <- factor(x = Trophoblasts@active.ident, levels = my_levels)
+#View(Trophoblasts@meta.data)
+
+```
+
+#Supplemental Fig1 A
+```{r}
+pdf("ADAM_cluster_heatmap.pdf",  width=6, height=5)
+Idents(Trophoblasts) <- "cluster_name"
+UMAPPlot     (Trophoblasts, 
+              pt.size = 1,
+              
+              label= TRUE,
+              shuffle = FALSE)
+dev.off()
+View(Trophoblasts@meta.data)
+
+jpeg("ADAM_cluster_heatmap2.jpeg",  width=6, height=5, units="in", res=300)
+UMAPPlot     (Trophoblasts, 
+              pt.size = 1,
+              label= FALSE)+NoLegend()
+dev.off()
+
+```
+
+#Sup Fig 1B
+
+#TEAD4 Supplemental Figure 1
+```{r}
+DefaultAssay (object = Trophoblasts) <- "RNA"
+jpeg("TEAD4_interface.jpeg", units="in", width=6, height=5, res=300)
+
+FeaturePlot  (object = Trophoblasts, features = c("TEAD4"),     min.cutoff = 0, order = TRUE, cols = c("grey", "red") , pt.size = 1                )
+dev.off()
+
+
+
+```
+
+#HLA-G Supplemental Figure 1
+```{r}
+DefaultAssay (object = Trophoblasts) <- "RNA"
+jpeg("HLA_g_interface.jpeg", units="in", width=6, height=5, res=300)
+FeaturePlot  (object = Trophoblasts, features = c("MMP12"),     min.cutoff = 0, order = TRUE, cols = c("grey", "red")  , pt.size = 1               )+ NoLegend()
+dev.off()
+```
+
+
+
+#ERVFRD-1 Supplemental Figure 1
+```{r}
+DefaultAssay (object = Trophoblasts) <- "RNA"
+jpeg("ERVFRD_1_interface.jpeg", units="in", width=6, height=5, res=300)
+FeaturePlot  (object = Trophoblasts, features = c("ERVFRD-1"),     min.cutoff = 0, order = TRUE, cols = c("grey", "red")  , pt.size = 1               )+ NoLegend()
+dev.off()
+```
+
+
+#EGFR Supplemental Figure 1
+```{r}
+DefaultAssay (object = Trophoblasts) <- "RNA"
+jpeg("EGFR_interface.jpeg", units="in", width=6, height=5, res=300)
+
+FeaturePlot  (object = Trophoblasts, features = c("EGFR"),     min.cutoff = 0, order = TRUE, cols = c("grey", "red") , pt.size = 1                ) + NoLegend()
+dev.off()
+
+
+
+```
+
+#ITGA1 Supplemental Figure 1
+```{r}
+DefaultAssay (object = Trophoblasts) <- "RNA"
+jpeg("ITGA1_interface.jpeg", units="in", width=6, height=5, res=300)
+
+FeaturePlot  (object = Trophoblasts, features = c("ITGA1"),     min.cutoff = 0, order = TRUE, cols = c("grey", "red") , pt.size = 1                ) + NoLegend()
+dev.off()
+
+
+
+```
+
+#Notch1 Supplemental Figure 1
+```{r}
+DefaultAssay (object = Trophoblasts) <- "RNA"
+jpeg("NOTCH1_interface.jpeg", units="in", width=6, height=5, res=300)
+
+FeaturePlot  (object = Trophoblasts, features = c("NOTCH1"),     min.cutoff = 0, order = TRUE, cols = c("grey", "red") , pt.size = 1                ) + NoLegend()
+dev.off()
+
+
+
+```
+
+#ITGA5 Supplemental Figure 1
+```{r}
+DefaultAssay (object = Trophoblasts) <- "RNA"
+jpeg("ITGA5_interface.jpeg", units="in", width=6, height=5, res=300)
+
+FeaturePlot  (object = Trophoblasts, features = c("ITGA5"),     min.cutoff = 0, order = TRUE, cols = c("grey", "red") , pt.size = 1                ) + NoLegend()
+dev.off()
+
+
+
+```
+
+#Supplemental Figure2 
+
+
+#Monocle3!
+
+```{r}
+detach("package:monocle", unload = TRUE)
+
+
+library(monocle3)
+```
+
+```{r}
+
+
+
+cds <- as.cell_data_set      (Trophoblasts, assay = "RNA")
+cds <- estimate_size_factors (cds)
+cds <- cluster_cells         (cds,
+                              reduction_method = c("UMAP"),
+                              cluster_method   = "leiden",
+                              partition_qval   = 0.05,
+                              resolution       = 0.00025)
+
+ 
+
+p1  <- plot_cells            (cds,                               show_trajectory_graph = FALSE)
+p2  <- plot_cells            (cds, genes=c("cpna-2", "egl-21", "ram-2", "inos-1"))
+
+
+ plot_cells            (cds, genes=c("CDH1"))
+
+
+plot_cells   (cds, color_cells_by = "orig.ident", label_cell_groups=FALSE,show_trajectory_graph = FALSE)
+
+marker_test_res <- top_markers(cds, group_cells_by="seurat_clusters", 
+                               reference_cells=1000, cores=4)
+
+top_specific_markers <- marker_test_res %>%
+                            filter(fraction_expressing >= 0.10) %>%
+                            group_by(cell_group) %>%
+                            top_n(3, pseudo_R2)
+
+top_specific_marker_ids <- unique(top_specific_markers %>% pull(gene_id))
+
+View(top_specific_marker_ids)
+
+
+rowData(cds)$gene_short_name <- cds@rowRanges@partitioning@NAMES
+
+rowData(cds)$gene_short_name <- row.names(rowData(cds))
+
+
+
+View(rowData(cds)$gene_short_name)
+
+plot_genes_by_group(cds,
+                    top_specific_marker_ids,
+                    group_cells_by="cluster_name",
+                    ordering_type="cluster_row_col",
+                    max.size=3)
+
+View(cds)
+
+wrap_plots (p1, p2)
+```
+
+```{r}
+cds <- learn_graph (cds,
+                    use_partition = FALSE,
+                    close_loop    = TRUE)
+```
+
+```{r}
+cds <- order_cells (cds)
+```
+
+```{r}
+plot_cells (cds,
+            label_groups_by_cluster = FALSE,
+            label_leaves            = FALSE,
+            label_branch_points     = FALSE,
+            cell_size                     = 2,
+            color_cells_by          = "seurat_clusters")
+
+library(RColorBrewer)
+
+plot_cells (cds,
+            color_cells_by                = "pseudotime",
+            label_cell_groups             = FALSE,
+            label_leaves                  = FALSE,
+            label_branch_points           = FALSE,
+            graph_label_size              = 1.5,
+            cell_size                     = 2,
+            trajectory_graph_color        = "black",
+            trajectory_graph_segment_size = 1.25)
+
+
+plot_cells (cds,
+            color_cells_by                = "pseudotime",
+            label_cell_groups             = FALSE,
+            label_leaves                  = FALSE,
+            label_branch_points           = FALSE,
+            graph_label_size              = 1.5,
+            cell_size                     = 2,
+            trajectory_graph_color        = "black",
+            trajectory_graph_segment_size = 1.25) + NoLegend ()
+#Figure 2B
+
+pdf("monocle3.pdf",  width=6, height=5)
+
+plot_cells (cds,
+            label_cell_groups             = F,
+            label_leaves                  = F,
+            label_branch_points           = F,
+            color_cells_by                = "ident",
+            cell_size                     = 2,
+            trajectory_graph_color        = "black",
+            trajectory_graph_segment_size = 1.25) 
+
+dev.off()
+
+
+
+```
+
+#Supplemental figure 3 - load previously created monocle 2 object
+```{r}
+detach("package:monocle3", unload = TRUE)
+
+
+library(monocle)
+```
+
+```{r}
+#loading my HSMM file
+load( "/Volumes/FREECOM HDD/R_ADAM/data/Monocle2_ALLplacentasTrophoblast_3May2021.RData")
+```
+
+```{r}
+
+HSMM_genes1 <- row.names(subset(fData(HSMM),
+          gene_short_name %in% c("HLA-G","ERVFRD-1","TEAD4")))
+
+
+HSMM_genes2 <- row.names(subset(fData(HSMM),
+          gene_short_name %in% c("MMP14","ADAMTS6", "ADAMTS1")))
+
+HSMM_genes3 <- row.names(subset(fData(HSMM),
+          gene_short_name %in% c("MMP15", "ADAM17","ADAM10")))
+
+HSMM_genes4 <- row.names(subset(fData(HSMM),
+          gene_short_name %in% c("MMP23B","TLL1", "ADAMTS19")))
+
+HSMM_genes5 <- row.names(subset(fData(HSMM),
+          gene_short_name %in% c("TLL2", "MMP19","ADAM10")))
+
+
+jpeg("Monocle2_CTB_branched_pseudotime.jpeg",  width=3, height=3,units="in", res=300)
+plot_genes_branched_pseudotime(HSMM[HSMM_genes1,],
+                       branch_point = 1,
+                       color_by = "cluster_name",
+                       ncol = 1)+ scale_color_manual(breaks = c("CTB 1", "CTB 2", "CTB 3",'CTB 4','cCTB 1' ,'EVT', "SCTp","cCTB 2"), values=c('#CD9600',"#7CAE00","#00BE67",'#00BFC4','#00A9FF','#FF61CC','#F8766D', '#C77CFF'))
+
+dev.off()
+jpeg("Monocle2_CTB_branched_pseudotime2.jpeg",  width=3, height=3,units="in", res=300)
+plot_genes_branched_pseudotime(HSMM[HSMM_genes2,],
+                       branch_point = 1,
+                       color_by = "cluster_name",
+                       ncol = 1)+ scale_color_manual(breaks = c("CTB 1", "CTB 2", "CTB 3",'CTB 4','cCTB 1' ,'EVT', "SCTp","cCTB 2"), values=c('#CD9600',"#7CAE00","#00BE67",'#00BFC4','#00A9FF','#FF61CC','#F8766D', '#C77CFF'))
+
+dev.off()
+jpeg("Monocle2_CTB_branched_pseudotime3.jpeg",  width=3, height=3,units="in", res=300)
+plot_genes_branched_pseudotime(HSMM[HSMM_genes3,],
+                       branch_point = 1,
+                       color_by = "cluster_name",
+                       ncol = 1)+ scale_color_manual(breaks = c("CTB 1", "CTB 2", "CTB 3",'CTB 4','cCTB 1' ,'EVT', "SCTp","cCTB 2"), values=c('#CD9600',"#7CAE00","#00BE67",'#00BFC4','#00A9FF','#FF61CC','#F8766D', '#C77CFF'))
+
+dev.off()
+jpeg("Monocle2_CTB_branched_pseudotime4.jpeg",  width=3, height=3,units="in", res=300)
+plot_genes_branched_pseudotime(HSMM[HSMM_genes4,],
+                       branch_point = 1,
+                       color_by = "cluster_name",
+                       ncol = 1)+ scale_color_manual(breaks = c("CTB 1", "CTB 2", "CTB 3",'CTB 4','cCTB 1' ,'EVT', "SCTp","cCTB 2"), values=c('#CD9600',"#7CAE00","#00BE67",'#00BFC4','#00A9FF','#FF61CC','#F8766D', '#C77CFF'))
+
+dev.off()
+
+jpeg("Monocle2_CTB_branched_pseudotime5.jpeg",  width=3, height=3,units="in", res=300)
+plot_genes_branched_pseudotime(HSMM[HSMM_genes5,],
+                       branch_point = 1,
+                       color_by = "cluster_name",
+                       ncol = 1)+ scale_color_manual(breaks = c("CTB 1", "CTB 2", "CTB 3",'CTB 4','cCTB 1' ,'EVT', "SCTp","cCTB 2"), values=c('#CD9600',"#7CAE00","#00BE67",'#00BFC4','#00A9FF','#FF61CC','#F8766D', '#C77CFF'))
+
+dev.off()
+
+```
+
+#Supplemental figure 4 is included in figure 6 analysis
+
+
+
+
+

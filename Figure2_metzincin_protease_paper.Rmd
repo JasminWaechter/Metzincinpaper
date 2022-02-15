@@ -1,0 +1,171 @@
+---
+title: "ADAM17_MFI"
+author: "Jasmin Wächter"
+date: "8/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+```
+#object has column names weight and group for the packages that follow
+```{r}
+MFIA17<-read_excel("/Volumes/FREECOM HDD/Jasmin's Work (Masters)/ADAM_PAPER/ADAM_paper_results/IF/MFI_ADAM17/For_R2.xlsx")
+
+as.data.frame(MFIA17)
+
+MFIA17
+```
+#plot - includes ANOVA 
+```{r}
+#needs to be a factor for boxplot to work 
+MFIA17$group <- as.factor(MFIA17$group)
+
+
+MFIA17 %>% ggplot(aes(x = group, y = weight))+
+  geom_boxplot()+
+  geom_point()+
+  scale_x_discrete(breaks=c(1,2,3))+
+  xlab("ADAM 17 Mean fluorescent intensity")+
+  stat_compare_means(method = "anova")+
+  stat_compare_means(ref.group = "1", label = "p.signif",label.y = c(1.4, 1.8),hide.ns = TRUE)+ 
+  scale_y_continuous(limits=c(0, 2))+
+  ylab("Mean FLuorescent Intensity")+
+  xlab("Placental Section")+
+  ggtitle("ADAM 17 expression increases towards distal column trophoblasts")+
+  scale_x_discrete(labels=c("1" = "Proximal TB", "2" = "Medial TB",
+                              "3" = "Distal TB"))+
+  theme_classic()+
+  theme(plot.title = element_text(hjust = 0.5))
+
+dev.off()
+
+```
+#calculate standard deviation and mean etc
+```{r}
+
+MFIA17$group <- as.factor(MFIA17$group)
+
+library(dplyr)
+group_by(MFIA17, group) %>%
+  summarise(
+    count = n(),
+    mean = mean(weight, na.rm = TRUE),
+    sd = sd(weight, na.rm = TRUE)
+  )
+
+```
+
+
+```{r}
+MFIA17
+set.seed(1234)
+dplyr::sample_n(MFIA17, 10)
+
+```
+
+#in case levels should be reordered
+```{r}
+MFIA17$group <- ordered(MFIA17$group,
+                         levels = c("1", "2", "3"))
+```
+
+
+
+
+#ANOVA
+```{r}
+# Compute the analysis of variance
+res.aov <- aov(weight ~ group, data = MFIA17)
+# Summary of the analysis
+summary(res.aov)
+```
+
+#Multiple comparisons test
+```{r}
+TukeyHSD(res.aov)
+```
+
+```{r}
+# 1. Homogeneity of variances
+plot(res.aov, 1)
+```
+
+```{r}
+# 2. Normality
+plot(res.aov, 2)
+```
+
+#Shapiro Wilks normality test
+```{r}
+# Extract the residuals
+aov_residuals <- residuals(object = res.aov )
+# Run Shapiro-Wilk test
+shapiro.test(x = aov_residuals )
+```
+
+#drop the outliers
+```{r}
+MFIA17 <- MFIA17[-c(56, 61, 67), ]
+```
+
+#repeat
+```{r}
+# Compute the analysis of variance
+res.aov <- aov(weight ~ group, data = MFIA17)
+# Summary of the analysis
+summary(res.aov)
+```
+```{r}
+TukeyHSD(res.aov)
+```
+
+```{r}
+# 1. Homogeneity of variances
+plot(res.aov, 1)
+```
+
+
+```{r}
+# 2. Normality
+plot(res.aov, 2)
+```
+#with the outliers removed the data is normally distributed
+```{r}
+# Extract the residuals
+aov_residuals <- residuals(object = res.aov )
+# Run Shapiro-Wilk test
+shapiro.test(x = aov_residuals )
+```
+#run in terminal or rscript
+```{r}
+setwd("/Volumes/FREECOM HDD/Jasmin's Work (Masters)/ADAM_PAPER/ADAM_paper_results/IF/MFI_ADAM17")
+
+
+pdf("ADAM17MFI.pdf",  width=6, height=5)
+
+MFIA17 %>% ggplot(aes(x = group, y = weight))+
+  geom_boxplot()+
+  geom_point()+
+  scale_x_discrete(breaks=c(1,2,3))+
+  xlab("ADAM 17 Mean fluorescent intensity")+
+  stat_compare_means(method = "anova")+
+  stat_compare_means(ref.group = "1", label = "p.signif",label.y = c(1.4, 1.8),hide.ns = TRUE)+ 
+  scale_y_continuous(limits=c(0, 2))+
+  ylab("Mean FLuorescent Intensity")+
+  xlab("Placental Section")+
+  ggtitle("ADAM 17 expression increases towards distal column trophoblasts")+
+  scale_x_discrete(labels=c("1" = "Proximal TB", "2" = "Medial TB",
+                            "3" = "Distal TB"))+
+  theme_classic()+
+  theme(plot.title = element_text(hjust = 0.5))
+
+dev.off()
+
+
+
+```
+

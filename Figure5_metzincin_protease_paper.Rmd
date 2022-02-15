@@ -1,0 +1,364 @@
+---
+title: "Figure 5 Metzincin protease paper"
+author: "Jasmin Wächter"
+date: "2/9/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(Seurat)
+#library(SeuratWrappers)
+library(nichenetr)
+library                   (tidyverse)
+library                   (Matrix)
+library                   (dplyr)
+library                   (ggplot2)
+library                   (cowplot)
+library                   (tibble)
+library                   (readxl)
+library(EnhancedVolcano)
+```
+
+
+#Load trophoblast object
+```{r}
+load("/Volumes/FREECOM HDD/R_ADAM/Trophoblast.Rdata")
+```
+
+#Load nichenet constructed networks
+```{r}
+gr_network = readRDS(url("https://zenodo.org/record/3260758/files/gr_network.rds"))
+lr_network = readRDS(url("https://zenodo.org/record/3260758/files/lr_network.rds"))
+sig_network = readRDS(url("https://zenodo.org/record/3260758/files/signaling_network.rds"))
+```
+
+#load literature curated subtrates and interactions
+```{r}
+CTB_info<-read_excel("/Users/jasmin/Desktop/CTB_proteases_updated.xlsx")
+
+as.data.frame(CTB_info)
+```
+#Inspect validity of list 
+```{r}
+CTB_info = CTB_info %>% 
+    filter(from %in% geneinfo_human$symbol & to %in% geneinfo_human$symbol) # keep only interactions between genes with oficial gene symbols: optional step
+```
+
+#Add source to dataset
+```{r}
+# give your data source a name
+CTB_info = CTB_info %>% mutate(source = "lit_review", database = "pubmed_etc") 
+```
+
+#add data to lr network
+```{r}
+new_lr_network = lr_network %>% bind_rows(CTB_info)
+```
+
+#Add new weights 
+```{r}
+new_network_weights_df = tibble(source = "lit_review", weight = 1)
+new_source_weights_df = optimized_source_weights_df %>% bind_rows(new_network_weights_df)
+```
+
+#Make new network weights and ligand target matrix 
+```{r}
+# aggregate the individual data sources in a weighted manner to obtain a weighted integrated signaling network
+weighted_networks = construct_weighted_networks(lr_network = new_lr_network, sig_network = sig_network, gr_network = gr_network, source_weights_df = new_source_weights_df)
+
+
+# downweigh the importance of signaling and gene regulatory hubs - use the optimized parameters of this 
+weighted_networks = apply_hub_corrections(weighted_networks = weighted_networks, lr_sig_hub = hyperparameter_list$lr_sig_hub, gr_hub = hyperparameter_list$gr_hub)
+
+
+#Get a full list of ligands
+ligands<-weighted_networks$lr_sig$from
+ligands<-unique(ligands)
+ligands<-as.list(ligands)
+
+
+# Infer ligand-target regulatory potential scores based on the weighted integrated networks
+ligand_target_matrix2 = construct_ligand_target_matrix(weighted_networks = weighted_networks, ligands = ligands, algorithm = "PPR", damping_factor = hyperparameter_list$damping_factor, ltf_cutoff = hyperparameter_list$ltf_cutoff)
+
+#SAVE
+save(ligand_target_matrix2, file = "/Volumes/FREECOM HDD/R_ADAM/30_sept_ligand_target_matrix_full.Rdata")
+save(weighted_networks, file = "/Volumes/FREECOM HDD/R_ADAM/30sept_weighted_networks_full.Rdata")
+```
+#Define receiver cells and get their genes
+```{r}
+## receiver --> consider a gene expressed if only expressed in 20%
+receiver = c("CTB 1","CTB 3","CTB 4", "CTB 2")
+expressed_genes_receiver = get_expressed_genes(receiver, Trophoblasts, pct = 0.2, assay_oi = 'RNA')
+
+background_expressed_genes = expressed_genes_receiver %>% .[. %in% rownames(ligand_target_matrix2)]
+```
+
+#Define sender cells and get their genes 
+```{r}
+#always use RNA slot - expressed in 20%
+## sender
+sender_celltypes =  c("CTB 1","CTB 3","CTB 4", "CTB 2")
+
+list_expressed_genes_sender = sender_celltypes %>% unique() %>% lapply(get_expressed_genes, Trophoblasts, 0.2 , assay_oi = 'RNA') # lapply to get the expressed genes of every sender cell type separately here
+expressed_genes_sender = list_expressed_genes_sender %>% unlist() %>% unique()
+```
+
+#Bind lr and sig network
+```{r}
+new_lr_sig_network = new_lr_network %>% bind_rows(sig_network)
+```
+
+#list data sources available and add your own
+```{r}
+addition<-data.frame("lit_review","pubmed_etc","literature","directional_ppi","protease_substrate")
+names(addition)<-c("source","database","type_db","type_interaction","network")
+
+annotation_data_sources_updated <- rbind(annotation_data_sources, addition)
+
+annotation_data_sources_updated$source %>% unique()
+```
+
+#choose which datasource to keep
+```{r}
+data_sources_to_keep = annotation_data_sources_updated %>% filter( source %in% c("kegg_cytokines",
+"kegg_cams",
+"kegg_neuroactive",
+"kegg_ecm",
+"pharmacology",
+"ramilowski_known",
+"ppi_lr",
+"ppi_l_bidir",
+"ppi_bidir_r",
+"ppi_bidir_bidir",
+"ppi_lr_go",
+"ppi_l_bidir_go",
+"ppi_bidir_r_go",
+"ppi_bidir_bidir_go",
+"cpdb_interaction",
+"cpdb_complex",
+"omnipath_directional",
+"omnipath_undirectional",
+"inweb_inbio_interaction",
+"inweb_inbio_interaction_pathway",
+"inweb_inbio_pathway",
+"pathwaycommons_interacts_with",
+"pathwaycommons_in_complex_with",
+"vinayagam_ppi","lit_review")) %>% pull(source)
+
+
+new_lr_sig_network_strict = new_lr_sig_network %>% filter(source %in% data_sources_to_keep) 
+
+new_lr_sig_network_strict_met<-new_lr_sig_network_strict%>%filter(from %in% c("ADAM17","ADAM10","ADAMTS1","ADAMTS6","MMP14","MMP15"))
+
+new_lr_sig_network_personal = new_lr_sig_network %>% filter(source %in% "lit_review") 
+
+
+```
+
+#Select expressed ligands and receptors 
+```{r}
+ligands = new_lr_sig_network_strict %>% pull(from) %>% unique()
+
+receptors = rownames(ligand_target_matrix2) 
+
+expressed_ligands = intersect(ligands,expressed_genes_sender)
+expressed_receptors = intersect(receptors,expressed_genes_receiver)
+
+CTB_proteases<-c("ADAM17","ADAM10","ADAMTS1","ADAMTS6","MMP14","MMP15")
+
+```
+
+#Ligand - receptor interactions in trophoblast - for chosen proteases
+```{r}
+# get the ligand-receptor network of the top-ranked ligands
+lr_network_top = new_lr_sig_network_strict_met %>% filter(from %in% CTB_proteases & to %in% expressed_receptors) %>% distinct(from,to)
+best_upstream_receptors = lr_network_top %>% pull(to) %>% unique()
+
+lr_network_top_df = weighted_networks$lr_sig %>% filter(from %in% CTB_proteases & to %in% best_upstream_receptors)
+
+# convert to a matrix
+lr_network_top_df = lr_network_top_df %>% spread("from","weight",fill = 0)
+lr_network_top_matrix = lr_network_top_df %>% select(-to) %>% as.matrix() %>% magrittr::set_rownames(lr_network_top_df$to)
+
+# perform hierarchical clustering to order the ligands and receptors
+dist_receptors = dist(lr_network_top_matrix, method = "binary")
+hclust_receptors = hclust(dist_receptors, method = "ward.D2")
+order_receptors = hclust_receptors$labels[hclust_receptors$order]
+
+dist_ligands = dist(lr_network_top_matrix %>% t(), method = "binary")
+hclust_ligands = hclust(dist_ligands, method = "ward.D2")
+order_ligands_receptor = hclust_ligands$labels[hclust_ligands$order]
+
+vis_ligand_receptor_network = lr_network_top_matrix[order_receptors, order_ligands_receptor]
+p_ligand_receptor_network = vis_ligand_receptor_network %>% t() %>% make_heatmap_ggplot("Expressed metzincin proteases","Metzincin substrates and interactions", color = "mediumvioletred", x_axis_position = "top",legend_title = "Prior interaction potential")
+p_ligand_receptor_network
+
+#Fig 5A
+ggsave("CTB_all_ligand_with_combined_weights_strict",device = "pdf", plot= p_ligand_receptor_network, path = "/Users/jasmin/Desktop", width = 10, height = 5)
+```
+
+#Figure 5B gene ontology  
+```{r, include = FALSE}
+library(clusterProfiler)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(ggplot2)
+
+
+
+```
+
+#Show which pathways identified genes are involved in
+```{r}
+ego4 <- enrichGO(gene         = twenty,
+                OrgDb         = org.Hs.eg.db,
+                keyType       = 'SYMBOL',
+                ont           = "CC",
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.01,
+                qvalueCutoff  = 0.05)
+
+
+goplot(ego4)
+
+
+ 
+pdf("GOpathway_diff_expressed_genes_goplot.pdf", height = 5, width = 9)  
+print(goplot(ego4))
+dev.off()
+
+```
+
+#Figure 5C - separate substrate or interaction
+
+```{r}
+twenty<-order_receptors
+choices<-new_lr_sig_network_strict_met[which( new_lr_sig_network_strict_met$to %in% twenty),] 
+```
+
+#Load information describing whether it is a substrate or an interaction
+```{r}
+SuborInt<-read_excel("/Users/jasmin/Desktop/Substrate_or_interaction.xlsx")
+
+as.data.frame(SuborInt)
+
+Interaction<-SuborInt$Interaction
+Substrate<-SuborInt$Substrate
+```
+
+#Get nichenet curated interactions
+```{r}
+nicheInt<-choices[which(!choices$source %in% "lit_review"),]
+Interaction_nichenet<-nicheInt$to %>% unique()
+```
+
+#make a CTB only meta.data slot
+```{r}
+Trophoblasts$CTB<- NA
+ 
+Trophoblasts$CTB[which(stringr::str_detect(Trophoblasts$cluster_name, "^CTB 1"))] <- "CTB"
+Trophoblasts$CTB[which(stringr::str_detect(Trophoblasts$cluster_name, "^CTB 2"))] <- "CTB"
+Trophoblasts$CTB[which(stringr::str_detect(Trophoblasts$cluster_name, "^CTB 3"))] <- "CTB"
+Trophoblasts$CTB[which(stringr::str_detect(Trophoblasts$cluster_name, "^CTB 4"))] <- "CTB"
+Trophoblasts$CTB[which(stringr::str_detect(Trophoblasts$cluster_name, "^cCTB 1"))] <- "non_CTB"
+Trophoblasts$CTB[which(stringr::str_detect(Trophoblasts$cluster_name, "^EVT"))] <- "non_CTB"
+Trophoblasts$CTB[which(stringr::str_detect(Trophoblasts$cluster_name, "^SCTp"))] <- "non_CTB"
+Trophoblasts$CTB[which(stringr::str_detect(Trophoblasts$cluster_name, "^cCTB 2"))] <- "non_CTB"
+
+Idents(Trophoblasts) <- "CTB"
+
+```
+
+#find markers expressed in the CTB cluster - DGE
+```{r}
+CTB_markers<- FindMarkers(Trophoblasts, 
+                          ident.1 = "CTB",
+                          logfc.threshold = -Inf, 
+                          min.pct = -Inf, 
+                          min.diff.pct = -Inf, 
+                          test.use = "MAST")
+
+
+CTB_markers <- CTB_markers %>% 
+                rownames_to_column(var="gene") 
+
+```
+#Fig 5C
+```{r}
+Interactions<-CTB_markers[which( CTB_markers$gene %in% Interaction),]
+Substrates<-CTB_markers[which( CTB_markers$gene %in% Substrate),]
+Nichenet_interactions<-CTB_markers[which( CTB_markers$gene %in% Interaction_nichenet),]
+
+
+pdf("DEG_interactions.pdf",  width=7, height=5)
+EnhancedVolcano(Interactions,
+                lab = Interactions$gene,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+               xlim = c(-6, 4),
+               ylim =c(0,320),
+               col=c("green","green","green","green")
+               
+       ) 
+dev.off()
+
+pdf("DEG_substrates.pdf",  width=7, height=5)
+EnhancedVolcano(Substrates,
+                lab = Substrates$gene,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+               xlim = c(-6, 4),
+ylim =c(0,320),
+               col=c("blue","blue","blue","blue")
+               
+       ) 
+
+dev.off()
+
+pdf("DEG_nichenet_interactions.pdf",  width=7, height=5)
+EnhancedVolcano(Nichenet_interactions,
+                lab = Nichenet_interactions$gene,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+               xlim = c(-6, 4),
+               ylim =c(0,320),
+               col=c("pink","pink","pink","pink")
+               
+       ) 
+
+dev.off()
+
+pdf("DEG_general.pdf",  width=7, height=5)
+
+EnhancedVolcano(CTB_markers,
+                lab = CTB_markers$gene,
+                x = "avg_log2FC",
+                y = "p_val_adj",
+               xlim = c(-6, 4),
+ ylim =c(0,320),
+ selectLab = c("GGCT"),
+               col=c("grey","grey","grey","grey"))
+
+dev.off()
+
+```
+#5D
+```{r}
+IntandsubandNiche<-c(Interaction, Substrate, Interaction_nichenet)
+
+IntandsubandNiche
+
+Top_identified<-CTB_markers[which(CTB_markers$avg_log2FC>0.5 & CTB_markers$gene %in% IntandsubandNiche & CTB_markers$p_val< 10e-4),]
+
+Top_identified
+
+Top_proteases<-choices[which(choices$to %in% Top_identified$gene),]
+
+Top_proteases
+
+
+```
+
+
+
+
